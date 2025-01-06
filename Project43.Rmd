@@ -1,0 +1,428 @@
+---
+title: "Earnings Calls and Stock Analysis"
+author: "Raunak Sood"
+date: "2023-06-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Load required packages
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(purrr)
+library(stargazer)
+library(tidyverse)
+
+
+
+# Folder path for the text files
+folder_path <- "/Users/raunaksood/Downloads/dataverse_files/Transcripts"
+
+# List of company abbreviations
+companies <- c("MU", "CSCO", "NVDA", "AMZN", "AAPL", "MSFT", "GOOGL", "AMD", "ASML", "INTC")
+
+# Create a list to store the transcript data
+transcript_data <- list()
+
+# Read the text files for each company and store in the list
+for (company in companies) {
+  # List of text file names for the current company
+  file_names <- list.files(path = file.path(folder_path, company), pattern = "\\.txt$", full.names = TRUE)
+  
+  # Create a list to store the transcript data for the current company
+  company_transcripts <- list()
+  
+  
+  
+  # Read each file and store its contents in the list
+  for (file_name in file_names) {
+    transcript <- readLines(file_name)
+    company_transcripts[[basename(file_name)]] <- unlist(transcript)
+  }
+  
+  # Store the transcript data for the current company in the main list
+  transcript_data[[company]] <- company_transcripts
+}
+
+# Accessing the transcript data for a specific company (e.g., "MU")
+mu_transcript <- transcript_data[["MU"]]
+cisco_transcript <- transcript_data[["CSCO"]]
+nvda_transcript <- transcript_data[["NVDA"]]
+amzn_transcript <- transcript_data[["AMZN"]]
+aapl_transcript <- transcript_data[["AAPL"]]
+msft_transcript <- transcript_data[["MSFT"]]
+googl_transcript <- transcript_data[["GOOGL"]]
+amd_transcript <- transcript_data[["AMD"]]
+asml_transcript <- transcript_data[["ASML"]]
+intc_transcript <- transcript_data[["INTC"]]
+
+file_path <- "/Users/raunaksood/Downloads/dataverse_files/Stock Values and Sector Index"
+
+
+# Read the stock files for the companies
+nvda_data <- read.csv(file.path(file_path, "NVDA.csv"))
+nvda_data$Company <- "NVDA"
+
+mu_data <- read.csv(file.path(file_path, "MU.csv"))
+mu_data$Company <- "MU"
+
+msft_data <- read.csv(file.path(file_path, "MSFT.csv"))
+msft_data$Company <- "MSFT"
+
+intc_data <- read.csv(file.path(file_path, "INTC.csv"))
+intc_data$Company <- "INTC"
+
+googl_data <- read.csv(file.path(file_path, "GOOGL.csv"))
+googl_data$Company <- "GOOGL"
+
+csco_data <- read.csv(file.path(file_path, "CSCO.csv"))
+csco_data$Company <- "CSCO"
+
+asml_data <- read.csv(file.path(file_path, "ASML.csv"))
+asml_data$Company <- "ASML"
+
+amzn_data <- read.csv(file.path(file_path, "AMZN.csv"))
+amzn_data$Company <- "AMZN"
+
+amd_data <- read.csv(file.path(file_path, "AMD.csv"))
+amd_data$Company <- "AMD"
+
+aapl_data <- read.csv(file.path(file_path, "AAPL.csv"))
+aapl_data$Company <- "AAPL"
+
+
+# Create the all_stock_data dataframe
+all_stock_data <- data.frame(Date = character(), stringsAsFactors = FALSE)
+
+# Merge all the dataframes into all_stock_data
+all_stock_data <- rbind(nvda_data, mu_data, msft_data, intc_data, googl_data, csco_data, asml_data, amzn_data, amd_data, aapl_data)
+
+# Order the dataframe by company and date
+all_stock_data <- all_stock_data[order(all_stock_data$Company, all_stock_data$Date), ]
+
+# Function to convert transcript data to data frame
+convert_to_dataframe <- function(transcript) {
+  transcript_df <- data.frame(text = unlist(transcript), stringsAsFactors = FALSE)
+  return(transcript_df)
+}
+
+# Convert transcript data to data frames
+MU_transcript_df <- convert_to_dataframe(mu_transcript)
+CSCO_transcript_df <- convert_to_dataframe(cisco_transcript)
+NVDA_transcript_df <- convert_to_dataframe(nvda_transcript)
+AMZN_transcript_df <- convert_to_dataframe(amzn_transcript)
+AAPL_transcript_df <- convert_to_dataframe(aapl_transcript)
+MSFT_transcript_df <- convert_to_dataframe(msft_transcript)
+GOOGL_transcript_df <- convert_to_dataframe(googl_transcript)
+AMD_transcript_df <- convert_to_dataframe(amd_transcript)
+ASML_transcript_df <- convert_to_dataframe(asml_transcript)
+INTC_transcript_df <- convert_to_dataframe(intc_transcript)
+
+# Create a list of transcript data frames
+transcript_dfs <- list(
+  MU = convert_to_dataframe(mu_transcript),
+  CSCO = convert_to_dataframe(cisco_transcript),
+  NVDA = convert_to_dataframe(nvda_transcript),
+  AMZN = convert_to_dataframe(amzn_transcript),
+  AAPL = convert_to_dataframe(aapl_transcript),
+  MSFT = convert_to_dataframe(msft_transcript),
+  GOOGL = convert_to_dataframe(googl_transcript),
+  AMD = convert_to_dataframe(amd_transcript),
+  ASML = convert_to_dataframe(asml_transcript),
+  INTC = convert_to_dataframe(intc_transcript)
+)
+
+# Combine all transcript data frames into a single data frame
+all_transcripts_df <- bind_rows(transcript_dfs, .id = "company")
+
+# Remove ".txt" and random numbers from row indices and store in a new "Date" column
+all_transcripts_df$Date <- gsub("\\.txt.*", "", row.names(all_transcripts_df))
+
+all_transcripts_df$Date <- gsub("-[^-]*$", "", all_transcripts_df$Date)
+
+
+
+# Perform sentiment analysis using the "bing" lexicon
+sentiment_analysis <- all_transcripts_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(company, sentiment) %>%
+  mutate(sentiment = ifelse(sentiment == "positive", "Positive", "Negative"))
+
+
+# Top 10 most common words
+top_words <- all_transcripts_df %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE) %>%
+  top_n(10)
+
+
+# Convert the "Date" column to the appropriate format
+all_stock_data$Date <- as.Date(all_stock_data$Date)
+
+# Convert the "Date" column in all_transcripts_df to the appropriate format
+all_transcripts_df$Date <- lubridate::ymd(all_transcripts_df$Date)
+
+# Extract the quarter information from the "Date" column
+all_stock_data$Quarter <- paste0("Q", quarter(all_stock_data$Date), " ", year(all_stock_data$Date))
+
+# Extract the quarter information from the "Date" column in all_transcripts_df
+all_transcripts_df$Quarter <- paste0("Q", quarter(all_transcripts_df$Date), " ", year(all_transcripts_df$Date))
+
+
+# Calculate sentiment scores for each transcript
+sentiment_scores <- all_transcripts_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  mutate(sentiment = ifelse(sentiment == "positive", "Positive", "Negative")) %>%
+  count(company, Quarter, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment_index = Positive - Negative)
+
+# Merge sentiment scores with stock data
+merged_data <- merge(all_stock_data, sentiment_scores, by.x = c("Company", "Quarter"), by.y = c("company", "Quarter"), all.x = TRUE)
+
+
+
+# Select the relevant columns from merged_data for positive_data
+positive_data <- merged_data %>%
+  select(Company, Quarter, Close, Positive)
+
+# Convert the "Date" column to the appropriate format
+all_stock_data$Date <- as.Date(all_stock_data$Date)
+all_transcripts_df$Date <- as.Date(all_transcripts_df$Date)
+
+merged_data <- merge(all_stock_data, sentiment_scores, by.x = c("Company", "Quarter"), by.y = c("company", "Quarter"), all.x = TRUE)
+
+relevant_data <- merged_data %>% select(Company, Quarter, Close, sentiment_index)
+
+relevant_data <- relevant_data %>%
+  group_by(Company) %>%
+  mutate(stock_price_change = lead(Close) - lag(Close))
+
+correlation_results <- relevant_data %>%
+  group_by(Company) %>%
+  summarize(correlation = cor(sentiment_index, stock_price_change, use = "pairwise.complete.obs"))
+
+# Calculate sentiment scores for each transcript by quarter
+sentiment_scores_quarter <- all_transcripts_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  mutate(sentiment = ifelse(sentiment == "positive", "Positive", "Negative")) %>%
+  count(company, Quarter, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment_index = Positive - Negative) %>%
+  mutate(Quarter = paste0("Q", Quarter, " "))
+
+```
+
+This report aims to uncover the effects of earnings calls on stock prices. In this report we look at data of 10 of the largest companies in 2020: Micron Technology Inc. (MU), Cisco Systems Inc. (CSCO), NVIDIA Corporation (NVDA), Amazon.com Inc. (AMZN), Apple Inc. (AAPL), Microsoft Corporation (MSFT), Alphabet Inc. or Google (GOOGL), Advanced Micro Devices Inc. (AMD), ASML Holding NV (ASML), Intel Corporation (INTC). Earnings call transcripts and stock data will be analyzed from 2016-2020. This analysis looks at stock trends, text and sentiment analysis, and effects of earnings calls sentiment on stock price.  
+
+
+```{r plot1, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Calculate the initial closing price for each stock
+initial_prices <- all_stock_data %>%
+  filter(year(Date) == 2016) %>%
+  group_by(Company) %>%
+  summarize(initial_price = first(Close))
+
+# Merge the initial prices with the all_stock_data
+merged_data <- merge(all_stock_data, initial_prices, by = "Company")
+
+# Normalize the stock prices to 100
+merged_data$Close_normalized <- (merged_data$Close / merged_data$initial_price) * 100
+
+# Line plot of normalized stock prices over time
+normalized_plot <- ggplot(merged_data, aes(x = Date, y = Close_normalized, color = Company)) +
+  geom_line() +
+  labs(x = "Time", y = "Normalized Stock Price", title = "Figure 1: Normalized Stock Prices Over Time") +
+  theme_minimal()
+
+# Display the plot
+print(normalized_plot)
+
+```
+
+In Figure 1, we see a normalized stock plot of all ten companies between 2016 and 2020. Each stock price is normalized at a 100 dollars so we get a better look at the growth of different companies. We find that AMD and NVDA exhibit the largest growth, although all companies show some growth. 
+
+
+```{r plot3, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Plotting sentiment scores by company
+sentiment_plot <- ggplot(sentiment_scores, aes(x = reorder(company, -sentiment_index), y = sentiment_index, fill = company)) +
+  geom_col() +
+  labs(x = "Company", y = "Sentiment Index", title = "Figure 2: Sentiment Index by Company") +
+  scale_fill_manual(values = c("#F8766D", "#00BFC4", "#FF61A6", "#7CAE00", "#B2D732", "#ECD078", "#E58606", "#2B6BAC", "#CAB3AB", "#6495ED")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Display the plot
+print(sentiment_plot)
+
+```
+
+In Figure 2, we look at sentiment index of each company. This index is calculated by positive words minus negative words. We see that earnings calls primarily consist of positive words, with Google having the highest count. 
+
+
+```{r plot4, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Top 10 most common words (excluding insignificant words and numbers)
+top_words <- all_transcripts_df %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  filter(!word %in% c("quarter", "call", "question", "analyst", "time", "operator", "ceo", "id", "division")) %>%
+  filter(!str_detect(word, "^\\d+$")) %>%
+  count(word, sort = TRUE) %>%
+  top_n(10)
+
+# Bar plot of the modified top words
+word_plot <- ggplot(top_words, aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Word", y = "Frequency", title = "Figure 3: Top 10 Most Common Words (Excluding Insignificant Words)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Display the modified plot
+print(word_plot)
+```
+
+Figure 3 looks at most common words found in earnings calls. Excluded words include words like ceo, quarter, and call, which are insignificant to this analysis. Words such as revenue, growth, and costumers, all make sense to indicate a growing business to analysts and the public. 
+
+
+```{r plot11, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Define non-relevant words to exclude
+non_relevant_words <- c("quarter", "analyst", "ceo", "gross", "id")
+
+
+# Get the top 300 most common words, excluding non-relevant words and numbers
+top_words <- all_transcripts_df %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  filter(!(word %in% non_relevant_words)) %>%
+  filter(!grepl("\\d", word)) %>%
+  count(word, sort = TRUE) %>%
+  top_n(1000)
+
+# Perform sentiment analysis on the top 300 words using the "afinn" lexicon
+sentiment_scores <- top_words %>%
+  inner_join(get_sentiments("afinn"), by = c("word" = "word")) %>%
+  filter(!is.na(value))
+
+# Select the top 20 words with sentiment values assigned, 5 positive and 5 negative
+positive_words <- sentiment_scores %>%
+  filter(value > 0) %>%
+  top_n(5, wt = n) %>%
+  mutate(sentiment_label = "Positive")
+
+negative_words <- sentiment_scores %>%
+  filter(value < 0) %>%
+  top_n(5, wt = n) %>%
+  mutate(sentiment_label = "Negative")
+
+top_words <- bind_rows(positive_words, negative_words)
+
+# Create the histogram
+word_histogram <- ggplot(top_words, aes(x = reorder(word, sentiment_label), y = n, fill = sentiment_label)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Positive" = "blue", "Negative" = "red"), guide = FALSE) +
+  labs(x = "Word", y = "Count", title = "Figure 4: Top 10 Positive/Negative Words") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))  # Adjust spacing
+
+# Display the histogram
+print(word_histogram)
+
+```
+
+In Figure 4, a bar plot displays the five most common positive words, and 5 most common negative words. It is important to note that positive words are much more common than negative words, so these are not the ten most common words. One interesting point that this plot displays is that the most common negative words do not spark extremely negative emotions. 
+
+
+```{r plot8, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+
+# Add a title for the regression analysis
+# Run regression analysis
+regression_model <- lm(Close ~ Positive, data = positive_data)
+
+# Print regression results with stargazer
+stargazer(regression_model, title = "Table 1: Regression Analysis", type = "text")
+```
+In this regression analysis, we have the close stock price as the outcome variable and the positive sentiment as the explanatory variable. To further explain this regression, it looks at earnings call "x" in year "x" of company"x". It then looks at the change in the stock price at the end of the current quarter from the end of the last quarter. This gives an accurate representation of how earnings calls sentiment may affect stock price. Here we see that they are significantly inversely correlated. This is an odd result, likely due to so many other factors more strongly affecting stock price. Also perhaps the stock price change is taken over too long of an interval for earnings calls sentiment to greatly affect it.    
+
+
+```{r plot6, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Correlation between sentiment index and stock prices
+correlation_plot <- ggplot(correlation_results, aes(x = Company, y = correlation)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Company", y = "Correlation", title = "Figure 5: Correlation between Sentiment Index and Stock Prices") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(hjust = 0.5))
+
+# Display the plot
+print(correlation_plot)
+```
+
+Figure 5 is a plot showing the correlation between sentiment and stock price. Once is again we see a mixed correlation likely due to reasons stated above. Microsoft has the highest correlation while Amazon has the least.     
+
+```{r plot9, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Time series of sentiment index
+sentiment_time_series <- relevant_data %>%
+  filter(Company == "AAPL") %>%
+  ggplot(aes(x = Quarter, y = sentiment_index, group = 1)) +
+  geom_line(color = "steelblue") +
+  geom_point(color = "steelblue", size = 2) +
+  labs(x = "Quarter", y = "Sentiment Index", title = "Figure 6: Sentiment Index Over Time (AAPL)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Display the time series plot
+print(sentiment_time_series)
+```
+
+Figure 6 looks at the sentiment index of Apple every quarter from 2016-2020. This was conducted as perhaps companies and executives are beginning to pay more close attention to using positive words in calls. This visual appears to back this hypothesis up. 
+
+```{r plot10, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+# Filter the stock data for Apple (AAPL) company
+aapl_stock_data <- all_stock_data[all_stock_data$Company == "AAPL", ]
+
+# Line plot of Apple stock prices over time
+aapl_stock_plot <- ggplot(aapl_stock_data, aes(x = Date, y = Close)) +
+  geom_line() +
+  labs(x = "Date", y = "Stock Price", title = "Figure 7: Apple (AAPL) Stock Prices Over Time") +
+  theme_minimal()
+
+# Display the plot
+print(aapl_stock_plot)
+
+```
+
+Figure 7 gives us another look at the stock price of Apple over time. This plot appears to somewhat mimic the increase in sentiment index of Apple's earnings calls. This would hint to a correlation between sentiment and true growth in stock price, however the other visualizations and data in this report show otherwise. 
+
+
+```{r plot12, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+
+# Manually set x-axis labels
+x_labels <- c("Q1 2016", "Q2 2016", "Q3 2016", "Q4 2016", "Q1 2017", "Q2 2017", "Q3 2017", "Q4 2017",
+              "Q1 2018", "Q2 2018", "Q3 2018", "Q4 2018", "Q1 2019", "Q2 2019", "Q3 2019", "Q4 2019",
+              "Q1 2020", "Q2 2020", "Q3 2020", "Q4 2020")
+
+# Create a scatter plot with loess line
+sentiment_scatter_plot <- ggplot(sentiment_scores_quarter, aes(x = Quarter, y = sentiment_index, color = company)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  labs(x = "Quarter", y = "Sentiment Index", title = "Figure 8: Sentiment Index of Companies Over Time") +
+  theme_minimal() +
+  theme(legend.position = "right", axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(labels = x_labels)
+
+# Display the plot
+print(sentiment_scatter_plot)
+
+```
+
+Finally, figure 8 is a sentiment index of all companies over time. Here we see that there is no real increase in sentiment for companies over time. This primarily dis-proves the hypothesis made with Figure 6 that executives, as a whole, are changing there verbage to add more positivity. 
+
+To conclude, this report provides insights regarding common words found in earnings calls, different positive and negative words, sentiment indexes, and preliminary analysis regarding effects of earnings calls sentiment on stock price. To conduct this analysis, transcripts and stock data is looked at for 2016-2020 of 10 of the most prominent companies. Originally, the hypothesis made was that a more positive sentiment would be positively correlated with stock price. The analysis conducted in this report shows otherwise. However, it is important to note that other factors such as supply and demand and consumer perception may be larger drivers affecting stock price. Thus, there is omitted variable bias. When re-visiting this analysis, looking at immediate change in stock price after the earnings call takes place will be insightful. 
+
+
+
